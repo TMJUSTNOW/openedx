@@ -2,8 +2,9 @@
 ConfigurationModel for the mobile_api djangoapp.
 """
 from django.db import models
-from mobile_api import utils
+
 from config_models.models import ConfigurationModel
+from mobile_api import utils
 from mobile_api.mobile_platform import PLATFORM_CLASSES
 
 
@@ -76,3 +77,25 @@ class AppVersionConfig(models.Model):
         """ parses version into major, minor and patch versions before saving """
         self.major_version, self.minor_version, self.patch_version = utils.parsed_version(self.version)
         super(AppVersionConfig, self).save(*args, **kwargs)
+
+
+class MobileAvailableConfig(ConfigurationModel):  # pylint: disable=W5101
+    """
+    Configuration for the mobile_available flag.
+
+    Setting mobile_available_override to true will always grant access in
+    utils.mobile_course_access and will ignore the mobile_available flag
+    when returning the list of enrolled courses in
+    users.views.UserCourseEnrollmentsList
+    """
+    mobile_available_override = models.BooleanField(
+        default=False,
+        help_text="If set, the mobile_available flag is ignored and enables mobiles access for all courses"
+    )
+
+    @classmethod
+    def ignore_mobile_available_flag(cls):
+        """
+        Returns a boolean whether the mobile_available_flag should be ignored
+        """
+        return cls.current().mobile_available_override

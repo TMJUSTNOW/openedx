@@ -4,9 +4,14 @@ Django admin dashboard configuration for LMS XBlock infrastructure.
 
 from django.contrib import admin
 from config_models.admin import ConfigurationModelAdmin
-from mobile_api.models import MobileApiConfig, AppVersionConfig
+from mobile_api.models import (
+    AppVersionConfig,
+    MobileApiConfig,
+    MobileAvailableConfig
+)
 
 admin.site.register(MobileApiConfig, ConfigurationModelAdmin)
+admin.site.register(MobileAvailableConfig, ConfigurationModelAdmin)
 
 
 class AppVersionConfigAdmin(admin.ModelAdmin):
