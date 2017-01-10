@@ -441,7 +441,7 @@ class CoursewareIndex(View):
             courseware_context['fragment'] = self.section.render(STUDENT_VIEW, section_context)
             if self.section.position and self.section.has_children:
                 display_items = self.section.get_display_items()
-                if len(display_items) > 0:
+                if display_items:
                     courseware_context['sequence_title'] = display_items[self.section.position - 1].display_name_with_default
 
         return courseware_context
