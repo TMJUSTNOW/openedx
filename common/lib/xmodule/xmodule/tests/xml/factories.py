@@ -9,9 +9,9 @@ from factory import Factory, lazy_attribute, post_generation, Sequence
 from lxml import etree
 
 from xblock.mixins import HierarchyMixin
+from xmodule.modulestore import only_xmodules
 from xmodule.modulestore.inheritance import InheritanceMixin
 from xmodule.x_module import XModuleMixin
-from xmodule.modulestore import only_xmodules
 
 
 class XmlImportData(object):
@@ -134,6 +134,13 @@ class XmlImportFactory(Factory):
 
         extracted._xml_node.append(self._xml_node)  # pylint: disable=no-member, protected-access
         extracted.policy.update(self.policy)
+        self._xml_node.attrib.update(  # pylint: disable=no-member, protected-access
+            {
+                key: value
+                for key, value in extracted._xml_node.attrib.iteritems()  # pylint: disable=no-member, protected-access
+                if key in InheritanceMixin.fields.keys()
+            }
+        )
 
 
 class CourseFactory(XmlImportFactory):

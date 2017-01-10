@@ -66,6 +66,13 @@ class SequenceFields(object):
         scope=Scope.settings,
     )
 
+    self_paced = Boolean(
+        display_name=_("Course is self-paced"),
+        help=_("ask Eric to remove this field"),
+        default=False,
+        scope=Scope.settings,
+    )
+
 
 class ProctoringFields(object):
     """
@@ -250,6 +257,7 @@ class SequenceModule(SequenceFields, ProctoringFields, XModule):
         if not self._can_user_view_content():
             if getattr(self, 'self_paced', False):
                 banner_text = _("Because the course has ended, this assignment is hidden from the learner.")
+                raise Exception("HAHAHAHAHA")
             else:
                 banner_text = _("Because the due date has passed, this assignment is hidden from the learner.")
 
@@ -277,12 +285,23 @@ class SequenceModule(SequenceFields, ProctoringFields, XModule):
             if content_milestones and self.runtime.user_is_staff:
                 return banner_text
 
+    def _get_course_end(self):
+        """
+        Helper to get course end, because I can't figure out an easier way to do it. Open to suggestions.
+        """
+        current = self
+        while current.location.block_type != 'course':
+            current = current.get_parent()
+            if current == None:
+                raise Exception("Key assumption violated - went past root of course tree without hitting course block")
+        return current.end
+
     def _can_user_view_content(self):
         """
         Returns whether the runtime user can view the content
         of this sequential.
         """
-        hidden_date = self._get_course().end if getattr(self, 'self_paced', False) else self.due
+        hidden_date = self._get_course_end() if getattr(self, 'self_paced', False) else self.due
         return (
             self.runtime.user_is_staff or
             self.verify_current_content_visibility(hidden_date, self.hide_after_due)

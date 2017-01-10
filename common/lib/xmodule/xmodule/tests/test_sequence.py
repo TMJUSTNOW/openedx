@@ -8,8 +8,7 @@ from freezegun import freeze_time
 from mock import Mock
 from xmodule.tests import get_test_system
 from xmodule.tests.helpers import StubUserService
-from xmodule.tests.xml import XModuleXmlImportTest
-from xmodule.tests.xml import factories as xml
+from xmodule.tests.xml import factories as xml, XModuleXmlImportTest
 from xmodule.x_module import STUDENT_VIEW
 from xmodule.seq_module import SequenceModule
 
@@ -22,28 +21,32 @@ class SequenceBlockTestBase(XModuleXmlImportTest):
     """
     Base class for tests of Sequence Module.
     """
-    @classmethod
-    def setUpClass(cls):
-        super(SequenceBlockTestBase, cls).setUpClass()
+    SELF_PACED = False  # optionally overridden by child classes
 
-        course_xml = cls._set_up_course_xml()
-        cls.course = cls.process_xml(course_xml)
-        cls._set_up_module_system(cls.course)
+    def setUp(self):
+        super(SequenceBlockTestBase, self).setUp()
 
-        for chapter_index in range(len(cls.course.get_children())):
-            chapter = cls._set_up_block(cls.course, chapter_index)
-            setattr(cls, 'chapter_{}'.format(chapter_index + 1), chapter)
+        course_xml = self._set_up_course_xml(self.SELF_PACED)
+        self.course = self.process_xml(course_xml)
+        self._set_up_module_system(self.course)
+
+        for chapter_index in range(len(self.course.get_children())):
+            chapter = self._set_up_block(self.course, chapter_index)
+            setattr(self, 'chapter_{}'.format(chapter_index + 1), chapter)
 
             for sequence_index in range(len(chapter.get_children())):
-                sequence = cls._set_up_block(chapter, sequence_index)
-                setattr(cls, 'sequence_{}_{}'.format(chapter_index + 1, sequence_index + 1), sequence)
+                sequence = self._set_up_block(chapter, sequence_index)
+                setattr(self, 'sequence_{}_{}'.format(chapter_index + 1, sequence_index + 1), sequence)
 
-    @classmethod
-    def _set_up_course_xml(cls):
+    @staticmethod
+    def _set_up_course_xml(self_paced=False):
         """
         Sets up and returns XML course structure.
         """
-        course = xml.CourseFactory.build(end=str(TOMORROW))
+        if self_paced:
+            course = xml.CourseFactory.build(end=str(TOMORROW), self_paced=str(True))
+        else:
+            course = xml.CourseFactory.build()
 
         chapter_1 = xml.ChapterFactory.build(parent=course)  # has 2 child sequences
         xml.ChapterFactory.build(parent=course)  # has 0 child sequences
@@ -64,14 +67,13 @@ class SequenceBlockTestBase(XModuleXmlImportTest):
 
         return course
 
-    @classmethod
-    def _set_up_block(cls, parent, index_in_parent):
+    def _set_up_block(self, parent, index_in_parent):
         """
         Sets up the stub sequence module for testing.
         """
         block = parent.get_children()[index_in_parent]
 
-        cls._set_up_module_system(block)
+        self._set_up_module_system(block)
 
         block.xmodule_runtime._services['bookmarks'] = Mock()  # pylint: disable=protected-access
         block.xmodule_runtime._services['user'] = StubUserService()  # pylint: disable=protected-access
@@ -79,8 +81,7 @@ class SequenceBlockTestBase(XModuleXmlImportTest):
         block.parent = parent.location
         return block
 
-    @classmethod
-    def _set_up_module_system(cls, block):
+    def _set_up_module_system(self, block):
         """
         Sets up the test module system for the given block.
         """
@@ -169,21 +170,7 @@ class SelfPacedSequenceBlockTestCase(SequenceBlockTestBase):
     """
     Allows tests to be run against a self-paced course.
     """
-    def setUp(self, *args, **kwargs):
-        """
-        Store the previous value of self.course.self_paced, and force the
-        effective value to be True for the duration of this test.
-        """
-        super(SelfPacedSequenceBlockTestCase, self).setUp(*args, **kwargs)
-        self.previous_self_paced = self.course.self_paced
-        self.course.self_paced = True
-
-    def tearDown(self, *args, **kwargs):
-        """
-        Restore the previous value of self.course.self_paced after test.
-        """
-        self.course.self_paced = self.previous_self_paced
-        super(SelfPacedSequenceBlockTestCase, self).tearDown(*args, **kwargs)
+    SELF_PACED = True
 
     @freeze_time(DAY_AFTER_TOMORROW)
     def test_hidden_content_past_end(self):
