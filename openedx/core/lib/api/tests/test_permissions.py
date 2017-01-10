@@ -10,7 +10,6 @@ from rest_framework.generics import GenericAPIView
 from student.roles import CourseStaffRole, CourseInstructorRole
 from openedx.core.lib.api.permissions import (
     IsStaffOrOwner,
-    IsStaffUser,
     IsCourseStaffInstructor,
     IsMasterCourseStaffInstructor,
 )
