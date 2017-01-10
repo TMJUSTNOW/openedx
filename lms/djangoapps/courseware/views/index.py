@@ -442,7 +442,8 @@ class CoursewareIndex(View):
             if self.section.position and self.section.has_children:
                 display_items = self.section.get_display_items()
                 if display_items:
-                    courseware_context['sequence_title'] = display_items[self.section.position - 1].display_name_with_default
+                    courseware_context['sequence_title'] = display_items[self.section.position - 1]
+                        .display_name_with_default
 
         return courseware_context
 
