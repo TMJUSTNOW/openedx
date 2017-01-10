@@ -388,6 +388,8 @@ class CoursewareIndex(View):
             'bookmarks_api_url': reverse('bookmarks'),
             'language_preference': self._get_language_preference(),
             'disable_optimizely': True,
+            'section_title': None,
+            'sequence_title': None
         }
         table_of_contents = toc_for_course(
             self.effective_user,
@@ -440,10 +442,7 @@ class CoursewareIndex(View):
             if self.section.position and self.section.has_children:
                 display_items = self.section.get_display_items()
                 if len(display_items) > 0:
-                    courseware_context['section_title'] = '{position_title} | {section_title}'.format(
-                        position_title=display_items[self.section.position - 1].display_name_with_default,
-                        section_title=courseware_context['section_title']
-                    )
+                    courseware_context['sequence_title'] = display_items[self.section.position - 1].display_name_with_default
 
         return courseware_context
 

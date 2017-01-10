@@ -51,6 +51,7 @@
             this.ajaxUrl = this.el.data('ajax-url');
             this.nextUrl = this.el.data('next-url');
             this.prevUrl = this.el.data('prev-url');
+            this.base_page_title = $('title').data('base-title').trim();
             this.bind();
             this.render(parseInt(this.el.data('position'), 10));
         }
@@ -77,21 +78,15 @@
 
         Sequence.prototype.updatePageTitle = function() {
             // update the page title to include the current section
-            var positionLink = this.link_for(this.position),
-                currentSectionTitle;
+            var currentSectionTitle,
+                positionLink = this.link_for(this.position);
 
             if (positionLink && positionLink.data('page-title')) {
-                currentSectionTitle = positionLink.data('page-title');
-            }
+                currentSectionTitle = positionLink.data('page-title') + ' | ' + this.base_page_title;
 
-            if (!this.base_page_title) {
-                // remove the current section's title (if it exists) to get the base
-                this.base_page_title = document.title.replace(currentSectionTitle, '');
-            }
-
-            if (currentSectionTitle !== this.currentSectionTitle) {
-                this.currentSectionTitle = currentSectionTitle;
-                document.title = this.currentSectionTitle + this.base_page_title;
+                if (currentSectionTitle !== document.title) {
+                    document.title = currentSectionTitle;
+                }
             }
         };
 
