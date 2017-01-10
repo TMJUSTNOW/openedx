@@ -13,8 +13,8 @@ from xmodule.x_module import STUDENT_VIEW
 from xmodule.seq_module import SequenceModule
 
 TODAY = now()
-TOMORROW = TODAY + timedelta(days=1)
-DAY_AFTER_TOMORROW = TOMORROW + timedelta(days=1)
+FUTURE_DATE = TODAY + timedelta(days=30)
+PAST_FUTURE_DATE = FUTURE_DATE + timedelta(days=7)
 
 
 class SequenceBlockTestBase(XModuleXmlImportTest):
@@ -44,7 +44,7 @@ class SequenceBlockTestBase(XModuleXmlImportTest):
         Sets up and returns XML course structure.
         """
         if self_paced:
-            course = xml.CourseFactory.build(end=str(TOMORROW), self_paced=str(True))
+            course = xml.CourseFactory.build(end=str(FUTURE_DATE), self_paced=str(True))
         else:
             course = xml.CourseFactory.build()
 
@@ -59,7 +59,7 @@ class SequenceBlockTestBase(XModuleXmlImportTest):
         xml.SequenceFactory.build(  # sequence_4_1
             parent=chapter_4,
             hide_after_due=str(True),
-            due=str(TOMORROW),
+            due=str(FUTURE_DATE),
         )
 
         for _ in range(3):
@@ -142,7 +142,7 @@ class SequenceBlockTestCase(SequenceBlockTestBase):
         self.assertIn("seq_module.html", html)
         self.assertIn("'banner_text': None", html)
 
-    @freeze_time(DAY_AFTER_TOMORROW)
+    @freeze_time(PAST_FUTURE_DATE)
     def test_hidden_content_past_due(self):
         progress_url = 'http://test_progress_link'
         html = self._get_rendered_student_view(
@@ -152,7 +152,7 @@ class SequenceBlockTestCase(SequenceBlockTestBase):
         self.assertIn("hidden_content.html", html)
         self.assertIn(progress_url, html)
 
-    @freeze_time(DAY_AFTER_TOMORROW)
+    @freeze_time(PAST_FUTURE_DATE)
     def test_masquerade_hidden_content_past_due(self):
         html = self._get_rendered_student_view(
             self.sequence_4_1,
@@ -172,7 +172,7 @@ class SelfPacedSequenceBlockTestCase(SequenceBlockTestBase):
     """
     SELF_PACED = True
 
-    @freeze_time(DAY_AFTER_TOMORROW)
+    @freeze_time(PAST_FUTURE_DATE)
     def test_hidden_content_past_end(self):
         progress_url = 'http://test_progress_link'
         html = self._get_rendered_student_view(
