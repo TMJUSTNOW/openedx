@@ -256,8 +256,8 @@ class XModuleFields(object):
     Common fields for XModules.
     """
     display_name = String(
-        display_name="Display Name",
-        help="This name appears in the horizontal navigation at the top of the page.",
+        display_name=_("Display Name"),
+        help=_("The display name for this component."),
         scope=Scope.settings,
         # it'd be nice to have a useful default but it screws up other things; so,
         # use display_name_with_default for those
