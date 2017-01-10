@@ -98,7 +98,7 @@ def xblock_handler(request, usage_key_string):
     GET
         json: returns representation of the xblock (locator id, data, and metadata).
               if ?fields=graderType, it returns the graderType for the unit instead of the above.
-              if ?format=concise, it returns a concise course outline.
+              if ?info_type='ancestor', it returns ancestor info of the xblock.
         html: returns HTML for rendering the xblock (which includes both the "preview" view and the "editor" view)
     PUT or POST or PATCH
         json: if xblock locator is specified, update the xblock instance. The json payload can contain
@@ -146,25 +146,17 @@ def xblock_handler(request, usage_key_string):
             accept_header = request.META.get('HTTP_ACCEPT', 'application/json')
 
             if 'application/json' in accept_header:
-                store = modulestore()
                 fields = request.GET.get('fields', '').split(',')
-                format = request.GET.get('format', '')
+                info_type = request.GET.get('info_type')
                 if 'graderType' in fields:
                     # right now can't combine output of this w/ output of _get_module_info, but worthy goal
                     return JsonResponse(CourseGradingModel.get_section_grader_type(usage_key))
-                elif format == 'concise':
+                elif info_type == 'ancestor':
                     xblock = _get_xblock(usage_key, request.user)
-                    course = store.get_course(xblock.location.course_key)   # pylint: disable=no-member
-                    course_outline = create_xblock_info(
-                        course,
-                        include_child_info=True,
-                        include_children_predicate=lambda xblock: xblock.has_children,
-                        is_concise=format
-                    )
-                    ancestor_info = _create_xblock_ancestor_info(xblock, course_outline, is_concise=format)
-                    return JsonResponse({'course_outline': course_outline, 'ancestor_info': ancestor_info})
+                    ancestor_info = _create_xblock_ancestor_info(xblock, is_concise=True)
+                    return JsonResponse(ancestor_info)
                 # TODO: pass fields to _get_module_info and only return those
-                with store.bulk_operations(usage_key.course_key):
+                with modulestore().bulk_operations(usage_key.course_key):
                     response = _get_module_info(_get_xblock(usage_key, request.user))
                 return JsonResponse(response)
             else:
@@ -911,6 +903,7 @@ def create_xblock_info(xblock, data=None, metadata=None, include_ancestor_info=F
     There are three optional boolean parameters:
       include_ancestor_info - if true, ancestor info is added to the response
       include_child_info - if true, direct child info is included in the response
+      is_concise - if true, returns the concise version of xblock info.
       course_outline - if true, the xblock is being rendered on behalf of the course outline.
         There are certain expensive computations that do not need to be included in this case.
 
@@ -1045,7 +1038,7 @@ def create_xblock_info(xblock, data=None, metadata=None, include_ancestor_info=F
     if metadata is not None:
         xblock_info["metadata"] = metadata
     if include_ancestor_info:
-        xblock_info['ancestor_info'] = _create_xblock_ancestor_info(xblock, course_outline)
+        xblock_info['ancestor_info'] = _create_xblock_ancestor_info(xblock, course_outline, include_child_info=True)
     if child_info:
         xblock_info['child_info'] = child_info
     if visibility_state == VisibilityState.staff_only:
@@ -1179,7 +1172,7 @@ def _compute_visibility_state(xblock, child_info, is_unit_with_changes, is_cours
         return VisibilityState.ready
 
 
-def _create_xblock_ancestor_info(xblock, course_outline, is_concise=False):
+def _create_xblock_ancestor_info(xblock, course_outline=False, include_child_info=False, is_concise=False):
     """
     Returns information about the ancestors of an xblock. Note that the direct parent will also return
     information about all of its children.
@@ -1200,7 +1193,7 @@ def _create_xblock_ancestor_info(xblock, course_outline, is_concise=False):
                 is_concise=is_concise
             ))
             collect_ancestor_info(get_parent_xblock(ancestor), is_concise=is_concise)
-    collect_ancestor_info(get_parent_xblock(xblock), include_child_info=True, is_concise=is_concise)
+    collect_ancestor_info(get_parent_xblock(xblock), include_child_info=include_child_info, is_concise=is_concise)
     return {
         'ancestors': ancestors
     }
@@ -1277,54 +1270,3 @@ def _xblock_type_and_display_name(xblock):
     return _('{section_or_subsection} "{display_name}"').format(
         section_or_subsection=xblock_type_display_name(xblock),
         display_name=xblock.display_name_with_default)
-
-
-def xblock_summary(xblock, include_children=False):
-    """
-    Returns a summarized dict of an xblock.
-
-    Arguments:
-        xblock (Xblock): An XBlock whose summary is to be made.
-        include_children (bool): If True, includes child XBlocks information.
-
-    Returns:
-        xblock_info(dict): A dict containing basic information about the XBlock.
-
-        A sample output may look like :
-        {
-            'category': 'sequential',
-            'display_name': 'seq1',
-            'location': 'i4x://org.0/course_0/sequential/5e828fac0c0d40879efeda6e3b6d1db5',
-            'child_info': [
-                {
-                    'category': 'vertical',
-                    'display_name': 'vertical1',
-                    'location': 'i4x://org.0/course_0/vertical/81ded1bb165e4b6fa19623911869a89d',
-                    'child_info': [
-                        {
-                            'category': 'problem',
-                            'display_name': 'problem1',
-                            'location': 'i4x://org.0/course_0/problem/2df788b55e0848e596859a20010c9f71'
-                        }, {
-                            'category': 'html',
-                            'display_name': 'html1',
-                            'location': 'i4x://org.0/course_0/html/7d74d1987128499d96530ac3e431eb1c'
-                        }
-                    ]
-                },
-                {
-                    'category': 'vertical',
-                    'display_name': 'vertical2',
-                    'location': 'i4x://org.0/course_0/vertical/81ded1bb165e4b6fa19623911869a8d2'
-                }
-            ]
-        }
-    """
-    xblock_info = {
-        'location': unicode(xblock.location),
-        'display_name': xblock.display_name,
-        'category': xblock.category
-    }
-    if include_children and xblock.has_children:
-        xblock_info['child_info'] = [xblock_summary(child) for child in xblock.get_children()]
-    return xblock_info

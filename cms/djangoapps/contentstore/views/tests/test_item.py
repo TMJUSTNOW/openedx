@@ -20,7 +20,7 @@ from contentstore.views.component import (
 )
 
 from contentstore.views.item import (
-    create_xblock_info, xblock_summary, _get_module_info, ALWAYS, VisibilityState, _xblock_type_and_display_name,
+    create_xblock_info, _get_module_info, ALWAYS, VisibilityState, _xblock_type_and_display_name,
     add_container_page_publishing_info
 )
 from contentstore.tests.utils import CourseTestCase
@@ -385,6 +385,59 @@ class GetItemTest(ItemTest):
         ])
         self.assertEqual(result["group_access"], {})
 
+    @ddt.data('ancestor', '')
+    def test_ancestor_info(self, info_type):
+        """
+        Test that we get correct ancestor info.
+
+        Arguments:
+            info_type (string): If info_type='ancestor', fetch ancestor info of the XBlock otherwise not.
+        """
+
+        # Create a parent chapter
+        chap1 = self.create_xblock(parent_usage_key=self.course.location, display_name='chapter1', category='chapter')
+        self.chapter_usage_key = self.response_usage_key(chap1)
+
+        # create a sequential
+        seq1 = self.create_xblock(parent_usage_key=self.chapter_usage_key, display_name='seq1', category='sequential')
+        self.seq_usage_key = self.response_usage_key(seq1)
+
+        # create a vertical
+        vert1 = self.create_xblock(parent_usage_key=self.seq_usage_key, display_name='vertical1', category='vertical')
+        self.vert_usage_key = self.response_usage_key(vert1)
+
+        # create problem and an html component
+        problem1 = self.create_xblock(parent_usage_key=self.vert_usage_key, display_name='problem1', category='problem')
+        self.problem_usage_key = self.response_usage_key(problem1)
+
+        def assert_xblock_info(xblock, xblock_info):
+            """
+            Assert we have correct xblock info.
+
+            Arguments:
+                xblock (XBlock): An XBlock item.
+                xblock_info (dict): A dict containing xblock information.
+            """
+            self.assertEqual(unicode(xblock.location), xblock_info['id'])
+            self.assertEqual(xblock.display_name, xblock_info['display_name'])
+            self.assertEqual(xblock.category, xblock_info['category'])
+
+        for usage_key in (self.problem_usage_key, self.vert_usage_key, self.seq_usage_key, self.chapter_usage_key):
+            xblock = self.get_item_from_modulestore(usage_key)
+            url = reverse_usage_url('xblock_handler', usage_key) + '?info_type={info_type}'.format(info_type=info_type)
+            response = self.client.get(url)
+            self.assertEqual(response.status_code, 200)
+            response = json.loads(response.content)
+            if info_type == 'ancestor':
+                self.assertIn('ancestors', response)
+                for ancestor_info in response['ancestors']:
+                    parent_xblock = xblock.get_parent()
+                    assert_xblock_info(parent_xblock, ancestor_info)
+                    xblock = parent_xblock
+            else:
+                self.assertNotIn('ancestors', response)
+                self.assertEqual(_get_module_info(xblock), response)
+
 
 @ddt.ddt
 class DeleteItem(ItemTest):
@@ -679,91 +732,6 @@ class TestDuplicateItem(ItemTest, DuplicateHelper):
 
         # Now send a custom display name for the duplicate.
         verify_name(self.seq_usage_key, self.chapter_usage_key, "customized name", display_name="customized name")
-
-
-@ddt.ddt
-class TestMoveItem(ItemTest):
-    """
-    Tests for move item.
-    """
-    def setUp(self):
-        """
-        Creates the test course structure to build course outline tree.
-        """
-        super(TestMoveItem, self).setUp()
-
-        # Create a parent chapter
-        chap1 = self.create_xblock(parent_usage_key=self.course.location, display_name='chapter1', category='chapter')
-        self.chapter_usage_key = self.response_usage_key(chap1)
-
-        chap2 = self.create_xblock(parent_usage_key=self.course.location, display_name='chapter2', category='chapter')
-        self.chapter2_usage_key = self.response_usage_key(chap2)
-
-        # create a sequential
-        seq1 = self.create_xblock(parent_usage_key=self.chapter_usage_key, display_name='seq1', category='sequential')
-        self.seq_usage_key = self.response_usage_key(seq1)
-
-        seq2 = self.create_xblock(parent_usage_key=self.chapter_usage_key, display_name='seq2', category='sequential')
-        self.seq2_usage_key = self.response_usage_key(seq2)
-
-        # create a vertical
-        vert1 = self.create_xblock(parent_usage_key=self.seq_usage_key, display_name='vertical1', category='vertical')
-        self.vert_usage_key = self.response_usage_key(vert1)
-
-        vert2 = self.create_xblock(parent_usage_key=self.seq_usage_key, display_name='vertical2', category='vertical')
-        self.vert2_usage_key = self.response_usage_key(vert2)
-
-        # create problem and an html component
-        problem1 = self.create_xblock(parent_usage_key=self.vert_usage_key, display_name='problem1', category='problem')
-        self.problem_usage_key = self.response_usage_key(problem1)
-
-        html1 = self.create_xblock(parent_usage_key=self.vert_usage_key, display_name='html1', category='html')
-        self.html_usage_key = self.response_usage_key(html1)
-
-    def assert_xblock_info(self, xblock, xblock_info, include_children=False):
-        """
-        Assert we have correct xblock info.
-
-        Arguments:
-            xblock (Xblock): An XBlock item.
-            xblock_info (dict): A dict containing xblock information.
-            include_children (bool): If True, includes child XBlocks information.
-        """
-        self.assertEqual(unicode(xblock.location), xblock_info['location'])
-        self.assertEqual(xblock.display_name, xblock_info['display_name'])
-        self.assertEqual(xblock.category, xblock_info['category'])
-
-        if include_children and xblock.has_children:
-            xblock_children = xblock.get_children()
-            self.assertEqual(len(xblock_children), len(xblock_info.get('child_info', [])))
-            for child in xblock_children:
-                child_info = xblock_summary(child, include_children=True)
-                self.assert_xblock_info(child, child_info)
-
-    @ddt.data(1, 0)
-    def test_get_course_tree(self, fetch_course_tree):
-        """
-        Test that we get course tree.
-
-        Arguments:
-            fetch_course_tree (int): If 1, fetch course tree otherwise not.
-        """
-        for usage_key in (self.problem_usage_key, self.vert_usage_key, self.seq_usage_key, self.chapter_usage_key):
-            xblock = self.get_item_from_modulestore(usage_key)
-            course = self.store.get_course(self.course.id)
-            url = reverse_usage_url('xblock_handler', usage_key)
-            url = url + '?course_tree={fetch_course_tree}'.format(fetch_course_tree=fetch_course_tree)
-            response = self.client.get(url)
-            self.assertEqual(response.status_code, 200)
-            response = json.loads(response.content)
-
-            if fetch_course_tree:
-                self.assert_xblock_info(xblock, response['xblock_info'])
-                self.assert_xblock_info(course, response['course_outline'], include_children=True)
-            else:
-                self.assertNotIn('xblock_info', response)
-                self.assertNotIn('course_outline', response)
-                self.assertEqual(_get_module_info(xblock), response)
 
 
 class TestDuplicateItemWithAsides(ItemTest, DuplicateHelper):
