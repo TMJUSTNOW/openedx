@@ -4,9 +4,10 @@
 define([
     'jquery', 'backbone', 'underscore', 'gettext',
     'js/views/baseview', 'js/views/modals/base_modal',
+    'common/js/components/views/feedback',
     'text!templates/move-xblock-modal.underscore'
 ],
-function($, Backbone, _, gettext, BaseView, BaseModal, MoveXblockModalTemplate) {
+function($, Backbone, _, gettext, BaseView, BaseModal, Feedback, MoveXblockModalTemplate) {
     'use strict';
 
     var MoveXblockModal = BaseModal.extend({
@@ -33,13 +34,23 @@ function($, Backbone, _, gettext, BaseView, BaseModal, MoveXblockModalTemplate) 
             return _.template(MoveXblockModalTemplate)(this.getContext());
         },
 
-        moveXBlock: function() {
-        },
-
         getContext: function() {
             return {
                 displayName: '"' + this.sourceXBlockInfo.get('display_name') + '"'
             };
+        },
+
+        show: function() {
+            BaseModal.prototype.show.apply(this, [false]);
+            Feedback.prototype.inFocus.apply(this, [this.options.modalWindowClass]);
+        },
+
+        hide: function() {
+            BaseModal.prototype.hide.apply(this);
+            Feedback.prototype.outFocus.apply(this);
+        },
+
+        moveXBlock: function() {
         }
     });
 
