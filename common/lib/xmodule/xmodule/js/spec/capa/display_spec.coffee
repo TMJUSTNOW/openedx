@@ -251,15 +251,17 @@ describe 'Problem', ->
               callable()
             done: (callable) ->
               callable()
-        spyOn @problem, 'enableAllButtons'
         @problem.submit()
-        expect(@problem.enableAllButtons).toHaveBeenCalledWith false, true
         if jQuery.active == 0
           deferred.resolve()
         deferred.promise()
 
+      spyOn(@problem, 'disableButtons').and.callThrough()
+      spyOn(@problem, 'enableSubmitButton')
+
       runs.call(self).then(->
-        expect(self.problem.enableAllButtons).toHaveBeenCalledWith true, true
+        expect(self.problem.disableButtons).toHaveBeenCalled
+        expect(self.problem.enableSubmitButton).toHaveBeenCalledWith false, true
         return
       ).always done
 
@@ -433,16 +435,18 @@ describe 'Problem', ->
           promise = undefined
           promise = always: (callable) ->
             callable()
-        spyOn @problem, 'enableAllButtons'
+        spyOn(@problem, 'disableButtons').and.callThrough()
+        spyOn @problem, 'enableSubmitButton'
         @problem.reset()
-        expect(@problem.enableAllButtons).toHaveBeenCalledWith false, false
+        expect(@problem.disableButtons).toHaveBeenCalled
+        expect(@problem.enableSubmitButton).toHaveBeenCalledWith false, false
         expect(@problem.submitButtonLabel).toHaveText 'Submit'
         if jQuery.active == 0
           deferred.resolve()
         deferred.promise()
 
       runs.call(self).then(->
-        expect(self.problem.enableAllButtons).toHaveBeenCalledWith true, false
+        expect(self.problem.enableSubmitButton).toHaveBeenCalledWith true, false
         expect(self.problem.submitButtonLabel).toHaveText 'Submit'
       ).always done
 
@@ -733,16 +737,18 @@ describe 'Problem', ->
           callback(success: 'correct', html: curr_html)
           promise = always: (callable) ->
             callable()
-        spyOn @problem, 'enableAllButtons'
+        spyOn(@problem, 'disableButtons').and.callThrough()
+        spyOn @problem, 'enableSubmitButton'
         @problem.save()
-        expect(@problem.enableAllButtons).toHaveBeenCalledWith false, false
+        expect(@problem.disableButtons).toHaveBeenCalled
+        expect(@problem.enableSubmitButton).toHaveBeenCalledWith false, false
         expect(@problem.submitButtonLabel).toHaveText 'Submit'
         if jQuery.active == 0
           deferred.resolve()
         deferred.promise()
 
       runs.call(self).then(->
-        expect(self.problem.enableAllButtons).toHaveBeenCalledWith true, false
+        expect(self.problem.enableSubmitButton).toHaveBeenCalledWith true, false
         expect(self.problem.submitButtonLabel).toHaveText 'Submit'
       ).always done
 
