@@ -131,8 +131,8 @@ def xblock_handler(request, usage_key_string):
                 :parent_locator: parent for new xblock, required for duplicate, move and create new instance
                 :duplicate_source_locator: if present, use this as the source for creating a duplicate copy
                 :move_source_locator: if present, use this as the source item for moving
-                :source_index: if present, use this as the source index for moving an item to a particular index
-                    otherwise source_index is calculated. It is sent back in the response.
+                :target_index: if present, use this as the target index for moving an item to a particular index
+                    otherwise target_index is calculated. It is sent back in the response.
                 :category: type of xblock, required if duplicate_source_locator is not present.
                 :display_name: name for new xblock, optional
                 :boilerplate: template name for populating fields, optional and only used
@@ -191,27 +191,26 @@ def xblock_handler(request, usage_key_string):
                     not has_studio_read_access(request.user, source_course)
             ):
                 raise PermissionDenied()
-
             dest_usage_key = _duplicate_item(
                 parent_usage_key,
                 duplicate_source_usage_key,
                 request.user,
                 request.json.get('display_name'),
             )
-
             return JsonResponse({'locator': unicode(dest_usage_key), 'courseKey': unicode(dest_usage_key.course_key)})
-        elif 'move_source_locator' in request.json:
+        else:
+            return _create_item(request)
+    elif request.method == 'PATCH':
+        if 'move_source_locator' in request.json:
             move_source_usage_key = usage_key_with_run(request.json.get('move_source_locator'))
             target_parent_usage_key = usage_key_with_run(request.json.get('parent_locator'))
-            source_index = request.json.get('source_index')
+            target_index = request.json.get('target_index')
             if (
                     not has_studio_write_access(request.user, target_parent_usage_key.course_key) or
                     not has_studio_read_access(request.user, target_parent_usage_key.course_key)
             ):
                 raise PermissionDenied()
-            return _move_item(move_source_usage_key, target_parent_usage_key, request.user, source_index)
-        else:
-            return _create_item(request)
+            return _move_item(move_source_usage_key, target_parent_usage_key, request.user, target_index)
     else:
         return HttpResponseBadRequest(
             'Only instance creation is supported without a usage key.',
@@ -477,6 +476,7 @@ def _save_xblock(user, xblock, data=None, children_strings=None, metadata=None, 
             xblock.data = data
         else:
             data = old_content['data'] if 'data' in old_content else None
+
         if fields:
             for field_name in fields:
                 setattr(xblock, field_name, fields[field_name])
@@ -667,20 +667,18 @@ def _get_source_index(source_usage_key, source_parent):
         return None
 
 
-def _move_item(source_usage_key, target_parent_usage_key, user, source_index=None):
+def _move_item(source_usage_key, target_parent_usage_key, user, target_index=None):
     """
-    Move an existing xblock as a child of the supplied target_parent_usage_key
-
-    If source_index is provided, xblock would be placed under target_parent_usage_key on that particular position.
+    Move an existing xblock as a child of the supplied target_parent_usage_key.
 
     Arguments:
         source_usage_key (BlockUsageLocator): Locator of source item.
-        dest_usage_key (BlockUsageLocator): Locator of destination item.
-        source_index (int): If provided, insert source item at the provided index location in dest_usage_key item.
+        target_parent_usage_key (BlockUsageLocator): Locator of target parent.
+        target_index (int): If provided, insert source item at provided index location in target_parent_usage_key item.
 
     Returns:
-        JsonResponse: Response after the move operation is complete.
-            Response only contains error if an invalid move operation is performed.
+        JsonResponse: Information regarding move operation. It may contains error info if an invalid move operation
+            is performed.
     """
     # Get the list of all component type XBlocks
     component_types = sorted(set(name for name, class_ in XBlock.load_classes()) - set(DIRECT_ONLY_CATEGORIES))
@@ -689,14 +687,14 @@ def _move_item(source_usage_key, target_parent_usage_key, user, source_index=Non
     with store.bulk_operations(source_usage_key.course_key):
         source_item = store.get_item(source_usage_key)
         source_parent = source_item.get_parent()
-        target_item = store.get_item(target_parent_usage_key)
+        target_parent = store.get_item(target_parent_usage_key)
         source_type = source_item.category
-        target_type = target_item.category
+        target_parent_type = target_parent.category
         error = None
 
         # Store actual/initial index of the source item. This would be sent back with response,
         # so that with Undo operation, it would easier to move back item to it's original/old index.
-        actual_index = _get_source_index(source_usage_key, source_parent)
+        source_index = _get_source_index(source_usage_key, source_parent)
 
         valid_move_type = {
             'vertical': source_type if source_type in component_types else 'component',
@@ -704,23 +702,30 @@ def _move_item(source_usage_key, target_parent_usage_key, user, source_index=Non
             'chapter': 'sequential',
         }
 
-        if valid_move_type.get(target_type, '') != source_type:
-            error = _('You can not move {source_type} into {target_type}').format(
+        if valid_move_type.get(target_parent_type, '') != source_type:
+            error = _('You can not move {source_type} into {target_parent_type}').format(
                 source_type=source_type,
-                target_type=target_type,
+                target_parent_type=target_parent_type,
             )
-        elif source_parent.location == target_item.location:
+        elif source_parent.location == target_parent.location:
             error = _('You can not move an item into the same parent.')
-        elif actual_index is None:
+        elif source_index is None:
             error = _('{source_usage_key} not found in {parent_usage_key}').format(
                 source_usage_key=unicode(source_usage_key),
                 parent_usage_key=unicode(source_parent.location)
             )
         else:
             try:
-                source_index = int(source_index) if source_index is not None else None
+                target_index = int(target_index) if target_index is not None else None
+                if len(target_parent.children) < target_index:
+                    error = _('You can not move {source_usage_key} at an invalid index ({target_index})').format(
+                        source_usage_key=unicode(source_usage_key),
+                        target_index=target_index
+                    )
             except ValueError:
-                error = _('You must provide source_index as an integer.')
+                error = _('You must provide target_index ({target_index}) as an integer.').format(
+                    target_index=target_index
+                )
         if error:
             return JsonResponse({'error': error}, status=400)
 
@@ -728,17 +733,17 @@ def _move_item(source_usage_key, target_parent_usage_key, user, source_index=Non
         source_parent.children.remove(source_item.location)
         store.update_item(source_parent, user.id)
 
-        # When source_index is provided, insert xblock at source_index position, otherwise insert at the end.
-        insert_at = source_index if source_index is not None else len(target_item.children)
+        # When target_index is provided, insert xblock at target_index position, otherwise insert at the end.
+        insert_at = target_index if target_index is not None else len(target_parent.children)
 
         # Add to new parent at particular location.
-        target_item.children.insert(insert_at, source_item.location)
-        store.update_item(target_item, user.id)
+        target_parent.children.insert(insert_at, source_item.location)
+        store.update_item(target_parent, user.id)
 
         context = {
             'move_source_locator': unicode(source_usage_key),
             'parent_locator': unicode(target_parent_usage_key),
-            'source_index': source_index if source_index is not None else actual_index
+            'source_index': target_index if target_index is not None else source_index
         }
         return JsonResponse(context)
 

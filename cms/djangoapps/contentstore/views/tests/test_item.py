@@ -22,7 +22,7 @@ from contentstore.views.component import (
 
 from contentstore.views.item import (
     create_xblock_info, _get_source_index, ALWAYS, VisibilityState, _xblock_type_and_display_name,
-    add_container_page_publishing_info, _move_item
+    add_container_page_publishing_info
 )
 from contentstore.tests.utils import CourseTestCase
 from student.tests.factories import UserFactory
@@ -720,14 +720,14 @@ class TestMoveItem(ItemTest):
         html1 = self.create_xblock(parent_usage_key=self.vert_usage_key, display_name='html1', category='html')
         self.html_usage_key = self.response_usage_key(html1)
 
-    def _move_component(self, source_usage_key, target_usage_key, source_index=None):
+    def _move_component(self, source_usage_key, target_usage_key, target_index=None):
         """
         Helper method to send move request and returns the response.
 
         Arguments:
             source_usage_key (BlockUsageLocator): Locator of source item.
-            target_usage_key (BlockUsageLocator): Locator of destination item.
-            source_index (int): If provided, insert source item at the provided index location in target_usage_key item.
+            target_usage_key (BlockUsageLocator): Locator of target parent.
+            target_index (int): If provided, insert source item at the provided index location in target_usage_key item.
 
         Returns:
             resp (JsonResponse): Response after the move operation is complete.
@@ -736,29 +736,34 @@ class TestMoveItem(ItemTest):
             'move_source_locator': unicode(source_usage_key),
             'parent_locator': unicode(target_usage_key)
         }
-        if source_index is not None:
-            data['source_index'] = source_index
-        resp = self.client.ajax_post(reverse('contentstore.views.xblock_handler'), json.dumps(data))
-        return resp
+        if target_index is not None:
+            data['target_index'] = target_index
 
-    def assert_move_item(self, source_usage_key, target_usage_key, source_index=None):
+        return self.client.patch(
+            reverse('contentstore.views.xblock_handler'),
+            json.dumps(data),
+            content_type='application/json'
+        )
+
+    def assert_move_item(self, source_usage_key, target_usage_key, target_index=None):
         """
         Assert move component.
 
         Arguments:
             source_usage_key (BlockUsageLocator): Locator of source item.
-            target_usage_key (BlockUsageLocator): Locator of destination item.
-            source_index (int): If provided, insert source item at the provided index location in target_usage_key item.
+            target_usage_key (BlockUsageLocator): Locator of target parent.
+            target_index (int): If provided, insert source item at the provided index location in target_usage_key item.
         """
         parent_loc = self.store.get_parent_location(source_usage_key)
         parent = self.get_item_from_modulestore(parent_loc)
-        actual_index = source_index if source_index is not None else _get_source_index(source_usage_key, parent)
-        response = self._move_component(source_usage_key, target_usage_key, source_index)
+        source_index = _get_source_index(source_usage_key, parent)
+        expected_index = target_index if target_index is not None else source_index
+        response = self._move_component(source_usage_key, target_usage_key, target_index)
         self.assertEqual(response.status_code, 200)
         response = json.loads(response.content)
         self.assertEqual(response['move_source_locator'], unicode(source_usage_key))
         self.assertEqual(response['parent_locator'], unicode(target_usage_key))
-        self.assertEqual(response['source_index'], actual_index)
+        self.assertEqual(response['source_index'], expected_index)
         new_parent_loc = self.store.get_parent_location(source_usage_key)
         self.assertEqual(new_parent_loc, target_usage_key)
         self.assertNotEqual(parent_loc, new_parent_loc)
@@ -797,34 +802,45 @@ class TestMoveItem(ItemTest):
         """
         Test move a component and move it back (undo).
         """
-        self.assert_move_item(self.html_usage_key, self.vert2_usage_key)
-        self.assert_move_item(self.html_usage_key, self.vert_usage_key)
+        # Get the initial index of the component
+        parent = self.get_item_from_modulestore(self.vert_usage_key)
+        original_index = _get_source_index(self.html_usage_key, parent)
 
-    def test_move_moved_parent(self):
-        """
-        Test move a moved parents.
-        """
-        self.assert_move_item(self.vert_usage_key, self.seq2_usage_key)
-        self.assert_move_item(self.seq2_usage_key, self.chapter2_usage_key)
+        # Move component and verify that response contains initial index
+        response = self._move_component(self.html_usage_key, self.vert2_usage_key)
+        response = json.loads(response.content)
+        self.assertEquals(original_index, response['source_index'])
 
-        # check vert_usage_key has seq2_usage_key as parent
-        self.assertEqual(self.store.get_parent_location(self.vert_usage_key), self.seq2_usage_key)
+        # Verify that new parent has the moved component at the last index.
+        parent = self.get_item_from_modulestore(self.vert2_usage_key)
+        self.assertEqual(self.html_usage_key, parent.children[-1])
 
-    def test_move_large_source_index(self):
+        # Verify original and new index is different now.
+        source_index = _get_source_index(self.html_usage_key, parent)
+        self.assertNotEquals(original_index, source_index)
+
+        # Undo Move to the original index, use the source index fetched from the response.
+        response = self._move_component(self.html_usage_key, self.vert_usage_key, response['source_index'])
+        response = json.loads(response.content)
+        self.assertEquals(original_index, response['source_index'])
+
+    def test_move_large_target_index(self):
         """
-        Test moving an item at a large index would insert item into target location at the end..
+        Test moving an item at a large index would generate an error message.
         """
         parent = self.get_item_from_modulestore(self.vert2_usage_key)
         parent_children_length = len(parent.children)
         response = self._move_component(self.html_usage_key, self.vert2_usage_key, parent_children_length + 10)
-        self.assertEqual(response.status_code, 200)
+        self.assertEqual(response.status_code, 400)
+        response = json.loads(response.content)
 
+        expected_error = 'You can not move {usage_key} at an invalid index ({target_index})'.format(
+            usage_key=self.html_usage_key,
+            target_index=parent_children_length + 10
+        )
+        self.assertEqual(expected_error, response['error'])
         new_parent_loc = self.store.get_parent_location(self.html_usage_key)
-        self.assertEqual(new_parent_loc, self.vert2_usage_key)
-
-        # Check that item is now at parent_children_length'th index.
-        parent = self.get_item_from_modulestore(self.vert2_usage_key)
-        self.assertEqual(parent_children_length, _get_source_index(self.html_usage_key, parent))
+        self.assertEqual(new_parent_loc, self.vert_usage_key)
 
     def test_invalid_move(self):
         """
@@ -860,12 +876,14 @@ class TestMoveItem(ItemTest):
         """
         Test moving an item to an invalid index.
         """
+        target_index = 'test_index'
         parent_loc = self.store.get_parent_location(self.html_usage_key)
-        response = self._move_component(self.html_usage_key, self.vert2_usage_key, 'test_index')
+        response = self._move_component(self.html_usage_key, self.vert2_usage_key, target_index)
         self.assertEqual(response.status_code, 400)
         response = json.loads(response.content)
 
-        self.assertEqual(response['error'], 'You must provide source_index as an integer.')
+        error = 'You must provide target_index ({target_index}) as an integer.'.format(target_index=target_index)
+        self.assertEqual(response['error'], error)
         new_parent_loc = self.store.get_parent_location(self.html_usage_key)
         self.assertEqual(new_parent_loc, parent_loc)
 
@@ -875,7 +893,11 @@ class TestMoveItem(ItemTest):
         """
         data = {'move_source_locator': unicode(self.html_usage_key)}
         with self.assertRaises(InvalidKeyError):
-            self.client.ajax_post(reverse('contentstore.views.xblock_handler'), json.dumps(data))
+            self.client.patch(
+                reverse('contentstore.views.xblock_handler'),
+                json.dumps(data),
+                content_type='application/json'
+            )
 
 
 class TestDuplicateItemWithAsides(ItemTest, DuplicateHelper):
