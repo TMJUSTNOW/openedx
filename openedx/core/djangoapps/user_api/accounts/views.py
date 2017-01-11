@@ -19,6 +19,7 @@ from openedx.core.lib.api.authentication import (
 from openedx.core.lib.api.parsers import MergePatchParser
 from student.models import User
 from .api import get_account_settings, update_account_settings
+from .permissions import IsSuperUserOrCanDeactivateUser
 from ..errors import UserNotFound, UserNotAuthorized, AccountUpdateError, AccountValidationError
 
 
@@ -227,7 +228,7 @@ class AccountDeactivationView(APIView):
     Account deactivation viewset. Currently only supports POST requests.
     Only admins can deactivate accounts.
     """
-    permission_classes = (permissions.IsAuthenticated, permissions.IsAdminUser)
+    permission_classes = (permissions.IsAuthenticated, IsSuperUserOrCanDeactivateUser)
 
     def post(self, request, username):
         """
