@@ -23,7 +23,7 @@ from rest_framework import status
 from rest_framework.test import APITestCase, APIClient
 from openedx.core.djangoapps.user_api.models import UserPreference
 
-from student.tests.factories import UserFactory
+from student.tests.factories import AdminFactory, ContentTypeFactory, PermissionFactory, SuperuserFactory, UserFactory
 from student.models import User, UserProfile, LanguageProficiency, PendingEmailChange
 from openedx.core.djangoapps.user_api.accounts import ACCOUNT_VISIBILITY_PREF_KEY
 from openedx.core.djangoapps.user_api.preferences.api import set_user_preference
@@ -830,8 +830,9 @@ class TestAccountDeactivation(TestCase):
 
     def setUp(self):
         super(TestAccountDeactivation, self).setUp()
-        self.staff_user = UserFactory.create(is_staff=True, password=self.PASSWORD)
-        self.test_user = UserFactory.create()
+        self.superuser = SuperuserFactory(password=self.PASSWORD)
+        self.staff_user = AdminFactory(password=self.PASSWORD)
+        self.test_user = UserFactory()
         self.url = reverse('accounts_deactivation', kwargs={'username': self.test_user.username})
         self.client = APIClient()
 
@@ -849,11 +850,27 @@ class TestAccountDeactivation(TestCase):
         test_user = User.objects.get(username=self.test_user.username)
         self.assertEqual(test_user.has_usable_password(), expected_activation_status)
 
-    def test_user_deactivated(self):
+    def test_superuser_deactivates_user(self):
         """
-        Verify a user is deactivated when staff posts to the deactivation endpoint.
+        Verify a user is deactivated when a superuser posts to the deactivation endpoint.
         """
-        self.client.login(username=self.staff_user.username, password=self.PASSWORD)
+        self.client.login(username=self.superuser.username, password=self.PASSWORD)
+        self.assertTrue(self.test_user.has_usable_password())
+        self.assert_activation_status(self.client)
+
+    def test_user_with_permission_deactivates_user(self):
+        """
+        Verify a user is deactivated when a user with permission posts to the deactivation endpoint.
+        """
+        user = UserFactory()
+        permission = PermissionFactory(
+            codename='can_deactivate_users',
+            content_type=ContentTypeFactory(
+                app_label='student'
+            )
+        )
+        user.user_permissions.add(permission)
+        self.client.login(username=user.username, password=self.PASSWORD)
         self.assertTrue(self.test_user.has_usable_password())
         self.assert_activation_status(self.client)
 
