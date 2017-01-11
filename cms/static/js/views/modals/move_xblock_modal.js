@@ -5,9 +5,10 @@ define([
     'jquery', 'backbone', 'underscore', 'gettext',
     'js/views/baseview', 'js/views/modals/base_modal',
     'common/js/components/views/feedback',
+    'edx-ui-toolkit/js/utils/string-utils',
     'text!templates/move-xblock-modal.underscore'
 ],
-function($, Backbone, _, gettext, BaseView, BaseModal, Feedback, MoveXblockModalTemplate) {
+function($, Backbone, _, gettext, BaseView, BaseModal, Feedback, StringUtils, MoveXblockModalTemplate) {
     'use strict';
 
     var MoveXblockModal = BaseModal.extend({
@@ -18,7 +19,6 @@ function($, Backbone, _, gettext, BaseView, BaseModal, Feedback, MoveXblockModal
         options: $.extend({}, BaseModal.prototype.options, {
             modalName: 'move-xblock',
             modalSize: 'med',
-            title: gettext('Move'),
             primaryActionButtonType: 'move',
             primaryActionButtonTitle: gettext('Move')
         }),
@@ -30,14 +30,19 @@ function($, Backbone, _, gettext, BaseView, BaseModal, Feedback, MoveXblockModal
             this.options.title = this.getTitle();
         },
 
+        getTitle: function() {
+            return StringUtils.interpolate(
+                gettext('Moving: {display_name}'),
+                {display_name: this.sourceXBlockInfo.get('display_name')}
+            );
+        },
+
         getContentHtml: function() {
             return _.template(MoveXblockModalTemplate)(this.getContext());
         },
 
         getContext: function() {
-            return {
-                displayName: '"' + this.sourceXBlockInfo.get('display_name') + '"'
-            };
+            return {};
         },
 
         show: function() {

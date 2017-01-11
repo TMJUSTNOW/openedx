@@ -5,8 +5,7 @@ define(['jquery', 'underscore', 'edx-ui-toolkit/js/utils/spec-helpers/ajax-helpe
         describe('MoveXBlockModal', function() {
             var modal,
                 showModal,
-                DISPLAY_NAME = 'HTML 101',
-                MOVE_TITLE = 'Move';
+                DISPLAY_NAME = 'HTML 101';
 
             showModal = function() {
                 modal = new MoveXBlockModal({
@@ -30,11 +29,8 @@ define(['jquery', 'underscore', 'edx-ui-toolkit/js/utils/spec-helpers/ajax-helpe
             });
 
             it('rendered as expected', function() {
-                expect(modal.$el.find('.modal-header .title').text()).toEqual(MOVE_TITLE);
-                expect(
-                    modal.$el.find('.modal-content .source-display-name').text()
-                ).toEqual('"' + DISPLAY_NAME + '"');
-                expect(modal.$el.find('.modal-actions .action-primary.action-move').text()).toEqual(MOVE_TITLE);
+                expect(modal.$el.find('.modal-header .title').text()).toEqual('Moving: ' + DISPLAY_NAME);
+                expect(modal.$el.find('.modal-actions .action-primary.action-move').text()).toEqual('Move');
             });
         });
     });

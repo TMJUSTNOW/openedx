@@ -1,4 +1,3 @@
-<h4 class='source-display-name'><%- displayName %></h4>
 <div class='breadcrumb-container'>
 </div>
 <div class='treeview-container'>

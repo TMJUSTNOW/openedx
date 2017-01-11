@@ -17,7 +17,7 @@ define(['jquery', 'underscore', 'gettext', 'js/views/pages/base_page', 'common/j
                 'click .edit-button': 'editXBlock',
                 'click .visibility-button': 'editVisibilitySettings',
                 'click .duplicate-button': 'duplicateXBlock',
-                'click .move-button': 'moveXblock',
+                'click .move-button': 'moveXBlock',
                 'click .delete-button': 'deleteXBlock',
                 'click .new-component-button': 'scrollToNewComponentButtons'
             },
@@ -192,7 +192,7 @@ define(['jquery', 'underscore', 'gettext', 'js/views/pages/base_page', 'common/j
                 this.duplicateComponent(this.findXBlockElement(event.target));
             },
 
-            moveXblock: function(event) {
+            moveXBlock: function(event) {
                 var xblockElement = this.findXBlockElement(event.target),
                     modal = new MoveXBlockModal({
                         sourceXBlockInfo: XBlockUtils.findXBlockInfo(xblockElement, this.model),
